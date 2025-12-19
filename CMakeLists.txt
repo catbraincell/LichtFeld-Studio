@@ -12,95 +12,98 @@ if ("${CMAKE_TOOLCHAIN_FILE}" STREQUAL "")
 endif()
 
 cmake_minimum_required(VERSION 3.30)
+
+# Suppress CMake developer warnings
+set(CMAKE_SUPPRESS_DEVELOPER_WARNINGS ON CACHE BOOL "" FORCE)
+
+# Default to Release build
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+    message(STATUS "No build type specified, defaulting to Release")
+    set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Build type" FORCE)
+    set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release" "MinSizeRel" "RelWithDebInfo")
+endif()
+
 project(LichtFeld-Studio LANGUAGES CUDA CXX C)
 
-# Get git commit hash (short and full)
-execute_process(
-        COMMAND git rev-parse --short HEAD
-        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-        OUTPUT_VARIABLE GIT_COMMIT_HASH_SHORT
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-        ERROR_QUIET
-)
+# Disable C++20 module scanning
+set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 
+# Get git version info
 execute_process(
-        COMMAND git describe --dirty
-        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-        OUTPUT_VARIABLE GIT_TAGGED_VERSION
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-        ERROR_QUIET
+    COMMAND git rev-parse --short HEAD
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    OUTPUT_VARIABLE GIT_COMMIT_HASH_SHORT
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET
 )
-
-# Fallback if not in a git repo
+execute_process(
+    COMMAND git describe --dirty
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    OUTPUT_VARIABLE GIT_TAGGED_VERSION
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET
+)
 if(NOT GIT_COMMIT_HASH_SHORT)
     set(GIT_COMMIT_HASH_SHORT "unknown")
 endif()
-
 if(NOT GIT_TAGGED_VERSION)
     set(GIT_TAGGED_VERSION "unknown")
 endif()
 
-message(STATUS "Git commit (short): ${GIT_COMMIT_HASH_SHORT}")
-message(STATUS "Git commit (full): ${GIT_TAGGED_VERSION}")
+# Generate git_version.h at configure time
+file(WRITE "${CMAKE_BINARY_DIR}/include/git_version.h"
+"#pragma once\n\
+#define GIT_COMMIT_HASH_SHORT \"${GIT_COMMIT_HASH_SHORT}\"\n\
+#define GIT_TAGGED_VERSION \"${GIT_TAGGED_VERSION}\"\n"
+)
 
 # Setup
 get_filename_component(PROJ_ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}" ABSOLUTE)
 
 option(ENABLE_CUDA_GL_INTEROP "Enable CUDA-OpenGL interoperability" ON)
 option(BUILD_TESTS "Build tests" OFF)
+option(ENABLE_ALLOCATION_PROFILING "Enable tensor allocation profiling" OFF)
+
+# Debug options
+option(ENABLE_TENSOR_VALIDATION "Enable runtime tensor NaN/Inf validation" OFF)
+option(ENABLE_CUDA_DEBUG_SYNC "Enable synchronous CUDA kernel checking (slow)" OFF)
+option(ENABLE_TENSOR_OP_TRACING "Enable tensor operation tracing" OFF)
+
+# Add -rdynamic for backtrace symbol resolution
+if(UNIX AND NOT APPLE)
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -rdynamic")
+endif()
 
 # Build fat binaries for all modern SMs (>= minimum). When OFF (default), build for the native GPU only.
 option(BUILD_CUDA_ALL_SM "Build CUDA fat binaries targeting all modern SMs (>= minimum SM)" OFF)
+
+# Compiler cache (CUDA caching disabled on Windows due to nvcc compatibility issues)
+find_program(SCCACHE_PROGRAM sccache)
+find_program(CCACHE_PROGRAM ccache)
+if(SCCACHE_PROGRAM)
+    set(CMAKE_C_COMPILER_LAUNCHER "${SCCACHE_PROGRAM}")
+    set(CMAKE_CXX_COMPILER_LAUNCHER "${SCCACHE_PROGRAM}")
+    if(WIN32)
+        message(STATUS "Compiler cache: sccache (C/C++ only, CUDA uncached)")
+    else()
+        set(CMAKE_CUDA_COMPILER_LAUNCHER "${SCCACHE_PROGRAM}")
+        message(STATUS "Compiler cache: sccache")
+    endif()
+elseif(CCACHE_PROGRAM)
+    set(CMAKE_C_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
+    set(CMAKE_CXX_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
+    if(WIN32)
+        message(STATUS "Compiler cache: ccache (C/C++ only, CUDA uncached)")
+    else()
+        set(CMAKE_CUDA_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
+        message(STATUS "Compiler cache: ccache")
+    endif()
+endif()
 
 # Minimum SM (compute capability) to include when BUILD_CUDA_ALL_SM=ON.
 # Examples: 75, 80, 86, 89, 90, 100...
 # Only has effect if BUILD_CUDA_ALL_SM is ON.
 set(BUILD_CUDA_ALL_MIN_SM "86" CACHE STRING "Minimum SM (compute capability) used when BUILD_CUDA_ALL_SM=ON Examples: 75, 80, 86, 89...")
-
-# Set Torch_DIR based on platform and build type
-if (WIN32)
-    if(CMAKE_CONFIGURATION_TYPES AND "${CMAKE_BUILD_TYPE}" STREQUAL "")
-        # https://github.com/pytorch/pytorch/issues/155667
-        set(Torch_DIR "${PROJ_ROOT_DIR}/external/release/libtorch/share/cmake/Torch")
-        message(STATUS "[${PROJECT_NAME}] User didn't specify -DCMAKE_BUILD_TYPE so use this path for searching libtorch -> ${PROJ_ROOT_DIR}/external/release/libtorch/share/cmake/Torch")
-
-        if (NOT EXISTS "${PROJ_ROOT_DIR}/external/release/")
-            message(FATAL_ERROR "you don't have a such path ${PROJ_ROOT_DIR}/external/release/ on your disk")
-        endif()
-
-        if (NOT EXISTS "${PROJ_ROOT_DIR}/external/release/libtorch/")
-            message(FATAL_ERROR "you don't have an extracted pre-installed libtorch (${PROJ_ROOT_DIR}/external/release/libtorch)!")
-        endif()
-    else()
-        if (CMAKE_BUILD_TYPE STREQUAL "Release")
-            set(Torch_DIR "${PROJ_ROOT_DIR}/external/release/libtorch/share/cmake/Torch")
-            message(STATUS "[${PROJECT_NAME}] User specified -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} so let's search libtorch by this path -> ${PROJ_ROOT_DIR}/external/release/libtorch/share/cmake/Torch")
-
-            if (NOT EXISTS "${PROJ_ROOT_DIR}/external/release/")
-                message(FATAL_ERROR "you don't have a such path ${PROJ_ROOT_DIR}/external/release/ on your disk")
-            endif()
-
-            if (NOT EXISTS "${PROJ_ROOT_DIR}/external/release/libtorch")
-                message(FATAL_ERROR "you don't have an extracted pre-installed libtorch (${PROJ_ROOT_DIR}/external/release/libtorch)!")
-            endif()
-        elseif (CMAKE_BUILD_TYPE STREQUAL "Debug")
-            set(Torch_DIR "${PROJ_ROOT_DIR}/external/debug/libtorch/share/cmake/Torch")
-            message(STATUS "[${PROJECT_NAME}] User specified -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} so let's search libtorch by this path -> ${PROJ_ROOT_DIR}/external/debug/libtorch/share/cmake/Torch")
-
-            if (NOT EXISTS "${PROJ_ROOT_DIR}/external/debug/")
-                message(FATAL_ERROR "you don't have a such path ${PROJ_ROOT_DIR}/external/debug/ on your disk")
-            endif()
-
-            if (NOT EXISTS "${PROJ_ROOT_DIR}/external/debug/libtorch")
-                message(FATAL_ERROR "you don't have an extracted pre-installed libtorch (${PROJ_ROOT_DIR}/external/debug/libtorch)!")
-            endif()
-        else()
-            message(FATAL_ERROR "libtorch binaries only available for Debug and Release on Windows. Current build type: '${CMAKE_BUILD_TYPE}'")
-        endif()
-    endif()
-else()
-    set(Torch_DIR "${PROJ_ROOT_DIR}/external/libtorch/share/cmake/Torch")
-endif()
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CUDA_STANDARD 20)
@@ -285,7 +288,6 @@ endif()
 message(STATUS "CUDA Toolkit ${CUDAToolkit_VERSION} found at ${CUDAToolkit_TARGET_DIR}")
 
 # Find packages
-find_package(Torch REQUIRED)
 find_package(TBB REQUIRED)
 find_package(Threads REQUIRED)
 find_package(OpenGL REQUIRED)
@@ -300,6 +302,8 @@ find_package(Freetype REQUIRED)
 find_package(WebP REQUIRED)
 find_package(LibArchive REQUIRED)
 find_package(OpenImageIO REQUIRED)
+find_package(Boost REQUIRED)
+find_package(OpenSSL REQUIRED)
 
 # TORCH_CUDA_ARCH_LIST is already defined by Torch
 # use it here as the global default CUDA architecture list too
@@ -341,12 +345,13 @@ else()
     set(CUDA_GL_INTEROP_ENABLED 0)
 endif()
 
-# Create a configuration header
+# Create configuration header (static options)
 configure_file(
-        "${CMAKE_CURRENT_SOURCE_DIR}/include/config.h.in"
+        "${CMAKE_CURRENT_SOURCE_DIR}/cmake/config.h.in"
         "${CMAKE_CURRENT_BINARY_DIR}/include/config.h"
         @ONLY
 )
+
 
 # Project-wide definitions
 add_definitions(-DPROJECT_ROOT_PATH="${PROJ_ROOT_DIR}")
@@ -357,92 +362,32 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
 endif()
 
 # =============================================================================
-# Kernel libs
+# External dependencies (new build only)
 # =============================================================================
-add_subdirectory(gsplat)
-add_subdirectory(src/training/fastgs)
-
-set_target_properties(gsplat_backend PROPERTIES CUDA_ARCHITECTURES "${LichtFeld-Studio_CUDA_ARCH}")
-set_target_properties(fastgs_backend PROPERTIES CUDA_ARCHITECTURES "${LichtFeld-Studio_CUDA_ARCH}")
-
-# =============================================================================
-# SHARED CUDA KERNELS (only if needed)
-# =============================================================================
-set(KERNEL_SOURCES)
-if(CUDA_GL_INTEROP_FOUND)
-    list(APPEND KERNEL_SOURCES kernels/cuda_gl_interop.cu)
-endif()
-
-# Add SOG-related kernels
-list(APPEND KERNEL_SOURCES
-        kernels/morton_encoding.cu
-        kernels/kmeans.cu
-)
-
-# Only create gaussian_kernels if there are kernels
-if(KERNEL_SOURCES)
-    add_library(gs_kernels STATIC ${KERNEL_SOURCES})
-
-    set_target_properties(gs_kernels PROPERTIES
-            CUDA_ARCHITECTURES "${LichtFeld-Studio_CUDA_ARCH}"
-            CUDA_SEPARABLE_COMPILATION ON
-            POSITION_INDEPENDENT_CODE ON
-            CUDA_RESOLVE_DEVICE_SYMBOLS ON
-    )
-
-    target_include_directories(gs_kernels
-            PUBLIC
-            ${CMAKE_CURRENT_SOURCE_DIR}/include
-            ${CMAKE_CURRENT_BINARY_DIR}/include
-            ${CMAKE_CURRENT_SOURCE_DIR}/include/kernels
-            ${CUDAToolkit_INCLUDE_DIRS}
-            ${OPENGL_INCLUDE_DIRS}
-            PRIVATE
-    )
-
-    target_link_libraries(gs_kernels
-            PUBLIC
-            CUDA::cudart
-            CUDA::curand
-            CUDA::cublas
-            ${TORCH_LIBRARIES}
-            glm::glm
-            ${OPENGL_LIBRARIES}
-            spdlog::spdlog
-    )
-
-    target_compile_options(gs_kernels PRIVATE
-            # CUDA device code + MSVC host compiler flags (Windows only)
-            $<$<AND:$<COMPILE_LANGUAGE:CUDA>,$<CXX_COMPILER_ID:MSVC>,$<CONFIG:Debug>>:-O0 -g -G -lineinfo -Xcompiler=/Od -Xcompiler=/Z7>
-            $<$<AND:$<COMPILE_LANGUAGE:CUDA>,$<CXX_COMPILER_ID:MSVC>,$<CONFIG:Release>>:-O3 -use_fast_math --ptxas-options=-v -Xcompiler=/O2 -Xcompiler=/DNDEBUG>
-
-            # CUDA device code for non-Windows
-            $<$<AND:$<COMPILE_LANGUAGE:CUDA>,$<NOT:$<CXX_COMPILER_ID:MSVC>>,$<CONFIG:Debug>>:-O0 -g -G -lineinfo>
-            $<$<AND:$<COMPILE_LANGUAGE:CUDA>,$<NOT:$<CXX_COMPILER_ID:MSVC>>,$<CONFIG:Release>>:-O3 -use_fast_math --ptxas-options=-v>
-    )
-else()
-    # Create empty interface library if no kernels
-    add_library(gs_kernels INTERFACE)
-endif()
+add_subdirectory(external)
 
 # =============================================================================
 # LIBRARY MODULES
 # =============================================================================
-add_subdirectory(src/core_new)     # New core module (lfs::core namespace)
-add_subdirectory(src/training_new) # New training module (lfs::training namespace)
-add_subdirectory(src/loader_new)   # New loader module (lfs::loader namespace)
-add_subdirectory(src/core)         # Foundation module
-add_subdirectory(src/geometry)     # Geometry utilities
-add_subdirectory(src/project)      # Project management
-add_subdirectory(src/loader)       # Data loading
-add_subdirectory(src/training)     # Training functionality
-add_subdirectory(src/rendering)   # Rendering pipeline
-add_subdirectory(src/visualizer)  # GUI and visualization
+add_subdirectory(src/core)      # Core module (lfs::core namespace)
+add_subdirectory(src/training)  # Training module (lfs::training namespace)
+add_subdirectory(src/io)        # I/O module (lfs::io namespace)
+add_subdirectory(src/rendering) # Rendering module (lfs::rendering namespace)
+add_subdirectory(src/visualizer) # Visualizer module (lfs::vis namespace)
+add_subdirectory(src/geometry)  # Geometry utilities
 
 # =============================================================================
-# MAIN EXECUTABLE
+# MAIN EXECUTABLES
 # =============================================================================
-add_executable(${PROJECT_NAME} src/main.cpp resources/lichtfeld-studio.rc)
+
+# -----------------------------------------------------------------------------
+# LichtFeld-Studio
+# -----------------------------------------------------------------------------
+add_executable(${PROJECT_NAME}
+    src/main.cpp
+    src/application.cpp
+    resources/lichtfeld-studio.rc
+)
 
 set_target_properties(${PROJECT_NAME} PROPERTIES
         CUDA_ARCHITECTURES "${LichtFeld-Studio_CUDA_ARCH}"
@@ -454,6 +399,8 @@ target_include_directories(${PROJECT_NAME}
         PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/include
         ${CMAKE_CURRENT_BINARY_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/src       # For application.cpp to find training_new/, visualizer/, etc.
+        ${CMAKE_CURRENT_SOURCE_DIR}/external  # For external headers
 
         ${CUDAToolkit_INCLUDE_DIRS}
         ${OPENGL_INCLUDE_DIRS}
@@ -461,16 +408,13 @@ target_include_directories(${PROJECT_NAME}
 
 target_link_libraries(${PROJECT_NAME}
         PRIVATE
-        gs_core
-        gs_geometry
-        gs_project
-        gs_loader
-        gs_training
-        gs_rendering
-        gs_visualizer
-        gs_kernels
-        gsplat_backend
-        fastgs_backend
+        # Application layer dependencies (needed by application.cpp)
+        lfs_visualizer     # For Visualizer class
+        lfs_training       # For training setup
+        lfs_geometry       # For EuclideanTransform
+        lfs_core           # Core library
+        lfs_io             # For CacheLoader
+        fastlfs_backend    # Rasterizer and optimizer
 
         ${OPENGL_LIBRARIES}
         CUDA::cudart
@@ -479,33 +423,90 @@ target_link_libraries(${PROJECT_NAME}
         OpenImageIO::OpenImageIO
 )
 
+# Copy nvImageCodec shared libraries next to executable for easy deployment
+if(TARGET nvimgcodec)
+    # Add post-build command to copy libraries and create symlinks (Unix only)
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "$<TARGET_FILE:nvimgcodec>"
+            "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
+        COMMENT "Copying nvImageCodec library"
+    )
+
+    # Create symlinks only on Unix-like systems (not Windows)
+    if(UNIX)
+        add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E create_symlink
+                "$<TARGET_FILE_NAME:nvimgcodec>"
+                "$<TARGET_FILE_DIR:${PROJECT_NAME}>/libnvimgcodec.so.0"
+            COMMAND ${CMAKE_COMMAND} -E create_symlink
+                "libnvimgcodec.so.0"
+                "$<TARGET_FILE_DIR:${PROJECT_NAME}>/libnvimgcodec.so"
+            COMMENT "Creating nvImageCodec symlinks"
+        )
+    endif()
+
+    # Create extensions directory and copy extension libraries
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory
+            "$<TARGET_FILE_DIR:${PROJECT_NAME}>/extensions"
+        COMMENT "Creating extensions directory"
+    )
+
+    # Copy extension libraries to extensions/ subdirectory
+    if(TARGET nvjpeg_ext)
+        add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "$<TARGET_FILE:nvjpeg_ext>"
+                "$<TARGET_FILE_DIR:${PROJECT_NAME}>/extensions/"
+            COMMENT "Copying nvjpeg extension to extensions/"
+        )
+        # Create symlink only on Unix-like systems
+        if(UNIX)
+            add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E create_symlink
+                    "$<TARGET_FILE_NAME:nvjpeg_ext>"
+                    "$<TARGET_FILE_DIR:${PROJECT_NAME}>/extensions/libnvjpeg_ext.so"
+                COMMENT "Creating nvjpeg extension symlink"
+            )
+        endif()
+    endif()
+
+    if(TARGET nvjpeg2k_ext)
+        add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "$<TARGET_FILE:nvjpeg2k_ext>"
+                "$<TARGET_FILE_DIR:${PROJECT_NAME}>/extensions/"
+            COMMENT "Copying nvjpeg2k extension to extensions/"
+        )
+        # Create symlink only on Unix-like systems
+        if(UNIX)
+            add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E create_symlink
+                    "$<TARGET_FILE_NAME:nvjpeg2k_ext>"
+                    "$<TARGET_FILE_DIR:${PROJECT_NAME}>/extensions/libnvjpeg2k_ext.so"
+                COMMENT "Creating nvjpeg2k extension symlink"
+            )
+        endif()
+    endif()
+
+    message(STATUS "Post-build: nvImageCodec libraries will be copied to executable directory")
+endif()
+
 # Platform-specific settings
-if(WIN32)
-    file(GLOB TORCH_DLLS "${Torch_DIR}/../../../lib/*.dll")
-    foreach(TORCH_DLL ${TORCH_DLLS})
-        add_custom_command(
-                TARGET ${PROJECT_NAME}
-                POST_BUILD
-                COMMAND ${CMAKE_COMMAND} -E copy_if_different "${TORCH_DLL}"
-                "$<TARGET_FILE_DIR:${PROJECT_NAME}>")
-    endforeach()
-elseif(UNIX)
+if(UNIX)
     target_link_libraries(${PROJECT_NAME} PRIVATE GL GLU)
 
-    find_path(TORCH_LIB_DIR libtorch_cpu.so
-            PATHS "${Torch_DIR}/../../../lib"
-            NO_DEFAULT_PATH)
-
-    if(TORCH_LIB_DIR)
-        set_target_properties(${PROJECT_NAME} PROPERTIES
-                INSTALL_RPATH "${CUDAToolkit_LIBRARY_DIR}:${TORCH_LIB_DIR}"
-                BUILD_WITH_INSTALL_RPATH TRUE
-                INSTALL_RPATH_USE_LINK_PATH TRUE
-        )
-        message(STATUS "Torch library directory: ${TORCH_LIB_DIR}")
-    else()
-        message(WARNING "Could not find Torch library directory")
-    endif()
+    set_target_properties(${PROJECT_NAME} PROPERTIES
+            INSTALL_RPATH "$ORIGIN:${CUDAToolkit_LIBRARY_DIR}"
+            BUILD_WITH_INSTALL_RPATH TRUE
+            INSTALL_RPATH_USE_LINK_PATH TRUE
+    )
+elseif(WIN32)
+    # On Windows, DLLs in the same directory as the .exe are automatically found
+    set_target_properties(${PROJECT_NAME} PROPERTIES
+            RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+    )
 endif()
 
 # Build type configuration function
@@ -518,20 +519,45 @@ function(configure_build_type target)
         elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
             target_compile_definitions(${target} INTERFACE RELEASE_BUILD)
         endif()
+        # Debug options for interface libraries
+        if(ENABLE_TENSOR_VALIDATION)
+            target_compile_definitions(${target} INTERFACE TENSOR_VALIDATION_ENABLED)
+        endif()
+        if(ENABLE_CUDA_DEBUG_SYNC)
+            target_compile_definitions(${target} INTERFACE CUDA_DEBUG_SYNC)
+        endif()
+        if(ENABLE_TENSOR_OP_TRACING)
+            target_compile_definitions(${target} INTERFACE TENSOR_OP_TRACING)
+        endif()
     else()
         if(CMAKE_BUILD_TYPE STREQUAL "Debug")
             target_compile_definitions(${target} PRIVATE DEBUG_BUILD)
         elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
             target_compile_definitions(${target} PRIVATE RELEASE_BUILD)
         endif()
+        # Debug options for regular libraries
+        if(ENABLE_TENSOR_VALIDATION)
+            target_compile_definitions(${target} PRIVATE TENSOR_VALIDATION_ENABLED)
+        endif()
+        if(ENABLE_CUDA_DEBUG_SYNC)
+            target_compile_definitions(${target} PRIVATE CUDA_DEBUG_SYNC)
+        endif()
+        if(ENABLE_TENSOR_OP_TRACING)
+            target_compile_definitions(${target} PRIVATE TENSOR_OP_TRACING)
+        endif()
     endif()
 endfunction()
 
 # Apply build configuration to all targets
-configure_build_type(gs_core)
-configure_build_type(gs_kernels)
-configure_build_type(gsplat_backend)
-configure_build_type(fastgs_backend)
+configure_build_type(fastlfs_backend)
+configure_build_type(lfs_core)
+configure_build_type(lfs_core_cuda)
+configure_build_type(lfs_tensor)
+configure_build_type(lfs_training)
+configure_build_type(lfs_rendering)
+configure_build_type(lfs_visualizer)
+configure_build_type(lfs_io)
+configure_build_type(lfs_geometry)
 configure_build_type(${PROJECT_NAME})
 
 # =============================================================================
@@ -550,7 +576,6 @@ message(STATUS "===========================================")
 message(STATUS "Build Configuration:")
 message(STATUS "  CUDA Version: ${CUDAToolkit_VERSION}")
 message(STATUS "  CUDA Archs: ${CMAKE_CUDA_ARCHITECTURES}")
-message(STATUS "  Torch Version: ${Torch_VERSION}")
 message(STATUS "  OpenGL Found: ${OPENGL_FOUND}")
 message(STATUS "  FreeType Found: ${FREETYPE_FOUND}")
 message(STATUS "  WebP Found: ${WebP_FOUND}")
@@ -569,4 +594,38 @@ find_program(CCACHE_PROGRAM ccache)
 if(CCACHE_PROGRAM)
     set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE "${CCACHE_PROGRAM}")
     message(STATUS "Using ccache: ${CCACHE_PROGRAM}")
+endif()
+
+# Build statistics (parses .ninja_log, no Python required)
+if(CMAKE_GENERATOR MATCHES "Ninja")
+    # Manual target: ninja build_stats
+    add_custom_target(build_stats
+        COMMAND ${CMAKE_COMMAND} -P ${CMAKE_SOURCE_DIR}/cmake/BuildStats.cmake
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+        COMMENT "Build time statistics by module"
+    )
+
+    # Auto-show after build: cmake -DSHOW_BUILD_STATS=ON ..
+    option(SHOW_BUILD_STATS "Show build stats after every build" OFF)
+    if(SHOW_BUILD_STATS)
+        add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -P ${CMAKE_SOURCE_DIR}/cmake/BuildStats.cmake
+            WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+        )
+    endif()
+endif()
+
+# Clean build target: ninja clean_all (clears build + compiler cache)
+if(CCACHE_PROGRAM)
+    add_custom_target(clean_all
+        COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR} --target clean
+        COMMAND ${CCACHE_PROGRAM} --clear
+        COMMENT "Cleaning build and compiler cache (ccache)"
+    )
+elseif(SCCACHE_PROGRAM)
+    add_custom_target(clean_all
+        COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR} --target clean
+        COMMAND ${SCCACHE_PROGRAM} --zero-stats
+        COMMENT "Cleaning build and resetting sccache stats"
+    )
 endif()

@@ -7,8 +7,9 @@
 #include "gui/ui_context.hpp"
 #include <glm/glm.hpp>
 #include <string>
+#include <imgui.h>
 
-namespace gs::gui::widgets {
+namespace lfs::vis::gui::widgets {
 
     // Reusable UI widgets
     bool SliderWithReset(const char* label, float* v, float min, float max, float reset_value);
@@ -22,4 +23,26 @@ namespace gs::gui::widgets {
     void DrawModeStatusWithContentSwitch(const UIContext& ctx);
     // Mode display helpers
     void DrawModeStatus(const UIContext& ctx);
-} // namespace gs::gui::widgets
+
+    // Shadow drawing for floating panels
+    void DrawWindowShadow(const ImVec2& pos, const ImVec2& size, float rounding = 6.0f);
+
+    // Vignette effect for viewport
+    void DrawViewportVignette(const ImVec2& pos, const ImVec2& size);
+
+    // Icon button with selection state styling
+    bool IconButton(const char* id, unsigned int texture, const ImVec2& size, bool selected = false,
+                    const char* fallback_label = "?");
+
+    // Semantic colored buttons - subtle tint on surface, stronger on hover
+    enum class ButtonStyle { Primary,
+                             Success,
+                             Warning,
+                             Error,
+                             Secondary };
+    bool ColoredButton(const char* label, ButtonStyle style, const ImVec2& size = {-1, 0});
+
+    // Typography
+    void SectionHeader(const char* text, const FontSet& fonts);
+
+} // namespace lfs::vis::gui::widgets
