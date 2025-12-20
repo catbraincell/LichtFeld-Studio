@@ -84,7 +84,8 @@ jobs:
         run: |
           cmake -B build -S . -G Ninja \
             -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
-            -DCMAKE_CUDA_COMPILER=/usr/local/cuda/bin/nvcc
+            -DCMAKE_CUDA_COMPILER=/usr/local/cuda/bin/nvcc \
+            -DCMAKE_MAKE_PROGRAM=$(which ninja)
 
       - name: Build
         run: cmake --build build -j 2
