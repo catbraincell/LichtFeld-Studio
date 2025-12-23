@@ -59,7 +59,7 @@ namespace lfs::core {
             float mask_opacity_penalty_power = 2.0f;  // Penalty falloff (1=linear, 2=quadratic)
 
             // Mip filter (anti-aliasing)
-            bool mip_filter = true;
+            bool mip_filter = false;
 
             // Bilateral grid parameters
             bool use_bilateral_grid = false;
