@@ -15,11 +15,11 @@
 #include "core/splat_data_export.hpp"
 #include "gui/html_viewer_export.hpp"
 #include "gui/localization_manager.hpp"
-#include "gui/string_keys.hpp"
 #include "gui/panels/main_panel.hpp"
 #include "gui/panels/scene_panel.hpp"
 #include "gui/panels/tools_panel.hpp"
 #include "gui/panels/training_panel.hpp"
+#include "gui/string_keys.hpp"
 #include "gui/ui_widgets.hpp"
 #include "gui/utils/windows_utils.hpp"
 #include "gui/windows/file_browser.hpp"
@@ -2691,9 +2691,9 @@ namespace lfs::vis::gui {
         bool overlay_hovered = false;
         if (ImGui::Begin("##StartupOverlay", nullptr,
                          ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
-                         ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
-                         ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoDocking |
-                         ImGuiWindowFlags_NoCollapse)) {
+                             ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
+                             ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoDocking |
+                             ImGuiWindowFlags_NoCollapse)) {
 
             ImDrawList* draw_list = ImGui::GetWindowDrawList();
             const ImVec2 window_pos = ImGui::GetWindowPos();
@@ -2712,7 +2712,7 @@ namespace lfs::vis::gui {
             if (font_small_)
                 ImGui::PushFont(font_small_);
             draw_list->AddText({window_center_x - supported_size.x * 0.5f, y},
-                              toU32WithAlpha(t.palette.text_dim, 0.85f), supported_text);
+                               toU32WithAlpha(t.palette.text_dim, 0.85f), supported_text);
             y += supported_size.y + GAP_TEXT_CORE11;
 
             // Core11 logo
@@ -2764,7 +2764,7 @@ namespace lfs::vis::gui {
 
             // Dismiss hint
             draw_list->AddText({window_center_x - hint_size.x * 0.5f, y},
-                              toU32WithAlpha(t.palette.text_dim, 0.5f), click_hint);
+                               toU32WithAlpha(t.palette.text_dim, 0.5f), click_hint);
             if (font_small_)
                 ImGui::PopFont();
 
