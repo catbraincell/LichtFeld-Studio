@@ -34,7 +34,8 @@ namespace {
         }
 
         for (const auto& entry : std::filesystem::directory_iterator(dir)) {
-            if (!entry.is_regular_file()) continue;
+            if (!entry.is_regular_file())
+                continue;
             auto ext = entry.path().extension().string();
             std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
             if (ext == ".jpg" || ext == ".jpeg" || ext == ".png") {
@@ -131,8 +132,7 @@ namespace {
         double total_time_ms = std::chrono::duration<double, std::milli>(end - start).count();
 
         auto stats = loader.get_stats();
-        double avg_latency = latencies.empty() ? 0 :
-            std::accumulate(latencies.begin(), latencies.end(), 0.0) / latencies.size();
+        double avg_latency = latencies.empty() ? 0 : std::accumulate(latencies.begin(), latencies.end(), 0.0) / latencies.size();
 
         return {
             name,
@@ -142,8 +142,7 @@ namespace {
             avg_latency,
             stats.hot_path_hits,
             stats.cold_path_misses,
-            stats.gpu_batch_decodes
-        };
+            stats.gpu_batch_decodes};
     }
 
 } // anonymous namespace
@@ -215,7 +214,7 @@ TEST(PipelinedLoaderBenchmark, BerlinDataset_WarmCache) {
         // Pass 2: should be all cache hits
         auto start = std::chrono::high_resolution_clock::now();
         for (size_t i = 0; i < 100 && i < files.size(); ++i) {
-            loader.prefetch(i + 1000, files[i], params);  // Different sequence IDs
+            loader.prefetch(i + 1000, files[i], params); // Different sequence IDs
         }
         for (size_t i = 0; i < 100 && i < files.size(); ++i) {
             auto ready = loader.get();
@@ -250,7 +249,7 @@ TEST(PipelinedLoaderBenchmark, Botanic2Dataset_ColdCache) {
     LoadParams params{.resize_factor = 4, .max_width = 0};
     PipelinedLoaderConfig config;
     config.jpeg_batch_size = 8;
-    config.prefetch_count = 16;  // Fewer prefetch due to large images
+    config.prefetch_count = 16; // Fewer prefetch due to large images
     config.io_threads = 2;
     config.cold_process_threads = 2;
 
@@ -271,7 +270,7 @@ TEST(PipelinedLoaderBenchmark, Botanic2Dataset_WarmCache_FullRes) {
     // Original JPEGs should hit hot path directly (no resize needed)
     LoadParams params{.resize_factor = 1, .max_width = 0};
     PipelinedLoaderConfig config;
-    config.jpeg_batch_size = 4;  // Smaller batches for huge images
+    config.jpeg_batch_size = 4; // Smaller batches for huge images
     config.prefetch_count = 8;
     config.io_threads = 2;
     config.cold_process_threads = 1;
@@ -449,7 +448,7 @@ TEST(PipelinedLoaderBenchmark, SimulatedTrainingLoop) {
 
     const size_t images_per_epoch = std::min<size_t>(100, files.size());
     const size_t num_epochs = 3;
-    const double training_work_ms = 5.0;  // Simulate 5ms of GPU training per image
+    const double training_work_ms = 5.0; // Simulate 5ms of GPU training per image
 
     PipelinedImageLoader loader(config);
 
@@ -520,12 +519,12 @@ TEST(PipelinedLoaderBenchmark, MinimalWorkers) {
     };
 
     std::vector<WorkerConfig> configs = {
-        {1, 1},  // Absolute minimum
+        {1, 1}, // Absolute minimum
         {1, 2},
         {2, 1},
-        {2, 2},  // Balanced
-        {4, 2},  // More I/O
-        {2, 4},  // More cold processing
+        {2, 2}, // Balanced
+        {4, 2}, // More I/O
+        {2, 4}, // More cold processing
     };
 
     for (const auto& wc : configs) {
@@ -558,7 +557,7 @@ TEST(PipelinedLoaderBenchmark, MinimalWorkers) {
             auto end = std::chrono::high_resolution_clock::now();
             double time_ms = std::chrono::duration<double, std::milli>(end - start).count();
 
-            size_t total_threads = wc.io_threads + wc.cold_threads + 1;  // +1 for GPU decode thread
+            size_t total_threads = wc.io_threads + wc.cold_threads + 1; // +1 for GPU decode thread
             std::cout << "  io=" << wc.io_threads << " cold=" << wc.cold_threads
                       << " (total " << total_threads << " threads): "
                       << format_throughput((50.0 / time_ms) * 1000) << " warm\n";
@@ -584,7 +583,7 @@ TEST(PipelinedLoaderBenchmark, MemoryEfficiency) {
     config.prefetch_count = 32;
     config.io_threads = 2;
     config.cold_process_threads = 2;
-    config.max_cache_bytes = 500 * 1024 * 1024;  // 500MB cache limit
+    config.max_cache_bytes = 500 * 1024 * 1024; // 500MB cache limit
 
     PipelinedImageLoader loader(config);
 
@@ -601,8 +600,8 @@ TEST(PipelinedLoaderBenchmark, MemoryEfficiency) {
     auto stats = loader.get_stats();
     double cache_mb = stats.jpeg_cache_bytes / (1024.0 * 1024.0);
     double bytes_per_entry = stats.jpeg_cache_entries > 0
-        ? static_cast<double>(stats.jpeg_cache_bytes) / stats.jpeg_cache_entries
-        : 0;
+                                 ? static_cast<double>(stats.jpeg_cache_bytes) / stats.jpeg_cache_entries
+                                 : 0;
 
     std::cout << "  Images loaded: " << test_images << "\n"
               << "  Cache entries: " << stats.jpeg_cache_entries << "\n"
@@ -756,10 +755,10 @@ TEST(PipelinedLoaderBenchmark, ImagesFolders_Berlin) {
     };
 
     std::vector<FolderTest> folders = {
-        {"images", 1},      // 4000x2280
-        {"images_2", 2},    // 2000x1140
-        {"images_4", 4},    // 1000x570
-        {"images_8", 8},    // 500x285
+        {"images", 1},   // 4000x2280
+        {"images_2", 2}, // 2000x1140
+        {"images_4", 4}, // 1000x570
+        {"images_8", 8}, // 500x285
     };
 
     // Full resolution reference
@@ -956,7 +955,7 @@ TEST(PipelinedLoaderBenchmark, DiskCacheFallback) {
 
     // Configure with very small memory cache to force disk usage
     PipelinedLoaderConfig config;
-    config.max_cache_bytes = 10 * 1024 * 1024;  // Only 10MB RAM cache
+    config.max_cache_bytes = 10 * 1024 * 1024; // Only 10MB RAM cache
     config.use_filesystem_cache = true;
     config.io_threads = 2;
     config.cold_process_threads = 2;
@@ -964,7 +963,7 @@ TEST(PipelinedLoaderBenchmark, DiskCacheFallback) {
     LoadParams params{.resize_factor = 1, .max_width = 0};
 
     // Load enough images to overflow the small cache
-    const size_t overflow_count = 50;  // Should exceed 10MB
+    const size_t overflow_count = 50; // Should exceed 10MB
 
     {
         PipelinedImageLoader loader(config);
@@ -1061,7 +1060,7 @@ TEST(PipelinedLoaderBenchmark, DetailedPerfAnalysis_Botanic2) {
     std::cout << "\n=== Detailed Performance Analysis (Botanic2 with resize) ===\n";
     std::cout << "Testing cache effectiveness across multiple epochs\n\n";
 
-    LoadParams params{.resize_factor = 4, .max_width = 0};  // ~1986x1315 output
+    LoadParams params{.resize_factor = 4, .max_width = 0}; // ~1986x1315 output
 
     PipelinedLoaderConfig config;
     config.jpeg_batch_size = 8;
@@ -1105,7 +1104,6 @@ TEST(PipelinedLoaderBenchmark, DetailedPerfAnalysis_Botanic2) {
             EXPECT_GT(throughput, 50.0) << "Warm cache should be faster";
         }
     }
-
 }
 
 TEST(PipelinedLoaderBenchmark, DetailedPerfAnalysis_Berlin) {
@@ -1120,7 +1118,7 @@ TEST(PipelinedLoaderBenchmark, DetailedPerfAnalysis_Berlin) {
     LoadParams params{.resize_factor = 1, .max_width = 0};
 
     PipelinedLoaderConfig config;
-    config.jpeg_batch_size = 16;  // Larger batches for small images
+    config.jpeg_batch_size = 16; // Larger batches for small images
     config.prefetch_count = 32;
     config.io_threads = 2;
     config.cold_process_threads = 2;
@@ -1223,7 +1221,7 @@ TEST(PipelinedLoaderBenchmark, OptimalConfigSearch) {
 
     // Find best config
     auto best = std::max_element(configs.begin(), configs.end(),
-        [](const ConfigTest& a, const ConfigTest& b) { return a.warm_throughput < b.warm_throughput; });
+                                 [](const ConfigTest& a, const ConfigTest& b) { return a.warm_throughput < b.warm_throughput; });
 
     std::cout << "\nBest: batch=" << best->batch_size << " io=" << best->io_threads
               << " cold=" << best->cold_threads << " -> " << best->warm_throughput << " img/s\n";

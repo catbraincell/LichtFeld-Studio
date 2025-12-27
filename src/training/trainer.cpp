@@ -1162,7 +1162,7 @@ namespace lfs::training {
             const float non_jpeg_ratio = train_dataset_->get_non_jpeg_ratio();
             if (non_jpeg_ratio > NON_JPEG_THRESHOLD) {
                 const size_t cold_threads = std::max(MIN_COLD_THREADS,
-                    static_cast<size_t>(std::thread::hardware_concurrency() / 2));
+                                                     static_cast<size_t>(std::thread::hardware_concurrency() / 2));
                 pipelined_config.cold_process_threads = cold_threads;
                 pipelined_config.prefetch_count = COLD_PREFETCH_COUNT;
                 LOG_INFO("{:.0f}% non-JPEG images, using {} cold threads", non_jpeg_ratio * 100.0f, cold_threads);
@@ -1174,8 +1174,10 @@ namespace lfs::training {
             LOG_DEBUG("Starting training iterations");
             while (iter <= params_.optimization.iterations) {
                 lfs::core::CudaMemoryPool::instance().set_iteration(iter);
-                if (stop_token.stop_requested() || stop_requested_.load()) break;
-                if (callback_busy_.load()) cudaStreamSynchronize(callback_stream_);
+                if (stop_token.stop_requested() || stop_requested_.load())
+                    break;
+                if (callback_busy_.load())
+                    cudaStreamSynchronize(callback_stream_);
 
                 auto example_opt = train_dataloader->next();
                 if (!example_opt) {

@@ -4,10 +4,10 @@
 
 #include "io/nvcodec_image_loader.hpp"
 #include "core/cuda/lanczos_resize/lanczos_resize.hpp"
-#include "cuda/image_format_kernels.cuh"
 #include "core/executable_path.hpp"
 #include "core/logger.hpp"
 #include "core/tensor.hpp"
+#include "cuda/image_format_kernels.cuh"
 
 #include <algorithm>
 #include <condition_variable>
@@ -869,7 +869,7 @@ namespace lfs::io {
             decoder,
             code_streams.data(),
             nv_images.data(),
-            batch_size,  // All images in one call!
+            batch_size, // All images in one call!
             &decode_params,
             &decode_future);
 
@@ -906,7 +906,7 @@ namespace lfs::io {
                 LOG_WARN("[NvCodecImageLoader] Batch decode image {} failed: {}",
                          i, processing_status_to_string(decode_statuses[i]));
                 results.push_back(Tensor());
-                uint8_tensors[i] = Tensor();  // Free immediately
+                uint8_tensors[i] = Tensor(); // Free immediately
                 continue;
             }
 
@@ -975,7 +975,7 @@ namespace lfs::io {
         for (size_t i = 0; i < batch_size; ++i) {
             auto status = nvimgcodecCodeStreamCreateFromHostMem(
                 impl_->instance, &code_streams[i],
-                jpeg_spans[i].first, jpeg_spans[i].second);  // Use span data directly
+                jpeg_spans[i].first, jpeg_spans[i].second); // Use span data directly
 
             if (status != NVIMGCODEC_STATUS_SUCCESS) {
                 for (size_t j = 0; j < i; ++j) {
@@ -1085,7 +1085,7 @@ namespace lfs::io {
             if (decode_statuses[i] != NVIMGCODEC_PROCESSING_STATUS_SUCCESS) {
                 LOG_WARN("[NvCodecImageLoader] Batch decode image {} failed", i);
                 results.push_back(Tensor());
-                uint8_tensors[i] = Tensor();  // Free immediately
+                uint8_tensors[i] = Tensor(); // Free immediately
                 continue;
             }
 

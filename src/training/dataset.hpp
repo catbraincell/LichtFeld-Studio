@@ -285,7 +285,8 @@ namespace lfs::training {
 
         /// Returns fraction of non-JPEG images (0.0 = all JPEG, 1.0 = none)
         [[nodiscard]] float get_non_jpeg_ratio() const {
-            if (cameras_.empty()) return 0.0f;
+            if (cameras_.empty())
+                return 0.0f;
             const auto count = std::count_if(cameras_.begin(), cameras_.end(), [](const auto& cam) {
                 auto ext = cam->image_path().extension().string();
                 std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
@@ -541,7 +542,8 @@ namespace lfs::training {
         PipelinedDataLoader& operator=(const PipelinedDataLoader&) = delete;
 
         std::optional<CameraExample> next() {
-            if (shutdown_) return std::nullopt;
+            if (shutdown_)
+                return std::nullopt;
             prefetch_next_batch();
 
             try {
@@ -576,7 +578,8 @@ namespace lfs::training {
         }
 
         void shutdown() {
-            if (shutdown_) return;
+            if (shutdown_)
+                return;
             shutdown_ = true;
             loader_->shutdown();
         }
@@ -587,7 +590,8 @@ namespace lfs::training {
         void prefetch_next_batch() {
             while (loader_->in_flight_count() < config_.prefetch_count) {
                 const auto indices = sampler_.next(1);
-                if (!indices || indices->empty()) break;
+                if (!indices || indices->empty())
+                    break;
 
                 const size_t camera_idx = (*indices)[0];
                 auto& cam = dataset_->get_cameras()[camera_idx];
@@ -638,7 +642,7 @@ namespace lfs::training {
     }
 
     inline auto create_infinite_pipelined_dataloader(std::shared_ptr<CameraDataset> dataset,
-                                                      lfs::io::PipelinedLoaderConfig config = {}) {
+                                                     lfs::io::PipelinedLoaderConfig config = {}) {
         return create_pipelined_dataloader<InfiniteRandomSampler>(dataset, config);
     }
 
