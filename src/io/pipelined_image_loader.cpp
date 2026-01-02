@@ -232,19 +232,8 @@ namespace lfs::io {
     }
 
     std::filesystem::path PipelinedImageLoader::get_fs_cache_path(const std::string& cache_key) const {
-        std::string safe_name = cache_key;
-        for (char& c : safe_name) {
-            if (c == '/' || c == '\\' || c == ':' || c == '*' || c == '?' || c == '"' || c == '<' || c == '>' || c == '|') {
-                c = '_';
-            }
-        }
-
-        if (safe_name.length() > 200) {
-            const auto hash = std::hash<std::string>{}(cache_key);
-            safe_name = std::to_string(hash) + "_" + safe_name.substr(safe_name.length() - 100);
-        }
-
-        return fs_cache_folder_ / (safe_name + ".jpg");
+        // Hash avoids Unicode path issues on Windows (operator/ interprets std::string as ANSI)
+        return fs_cache_folder_ / (std::to_string(std::hash<std::string>{}(cache_key)) + ".jpg");
     }
 
     bool PipelinedImageLoader::is_jpeg_data(const std::vector<uint8_t>& data) const {
