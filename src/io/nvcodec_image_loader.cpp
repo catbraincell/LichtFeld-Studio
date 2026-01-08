@@ -563,11 +563,14 @@ namespace lfs::io {
             target_height /= resize_factor;
         }
         if (max_width > 0 && (target_width > max_width || target_height > max_width)) {
-            const float scale = (target_width > target_height)
-                                    ? static_cast<float>(max_width) / target_width
-                                    : static_cast<float>(max_width) / target_height;
-            target_width = static_cast<int>(target_width * scale);
-            target_height = static_cast<int>(target_height * scale);
+            // Integer math to match OIIO and avoid float rounding errors
+            if (target_width > target_height) {
+                target_height = std::max(1, max_width * target_height / target_width);
+                target_width = max_width;
+            } else {
+                target_width = std::max(1, max_width * target_width / target_height);
+                target_height = max_width;
+            }
         }
         const bool needs_resize = (target_width != src_width || target_height != src_height);
 
