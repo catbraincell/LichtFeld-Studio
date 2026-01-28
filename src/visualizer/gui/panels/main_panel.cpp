@@ -340,17 +340,29 @@ namespace lfs::vis::gui::panels {
 
         ImGui::Separator();
 
-        float fov = settings.fov;
-        if (widgets::SliderWithReset(LOC(MainPanel::FOV), &fov, 45.0f, 120.0f, 75.0f, LOC(Tooltip::FOV))) {
-            render_manager->setFov(fov);
+        float focal_mm = settings.focal_length_mm;
+        if (widgets::SliderWithReset(LOC(MainPanel::FOCAL_LENGTH), &focal_mm,
+                                     lfs::rendering::MIN_FOCAL_LENGTH_MM,
+                                     lfs::rendering::MAX_FOCAL_LENGTH_MM,
+                                     lfs::rendering::DEFAULT_FOCAL_LENGTH_MM,
+                                     LOC(Tooltip::FOCAL_LENGTH), "%.0f mm")) {
+            render_manager->setFocalLength(focal_mm);
 
             ui::RenderSettingsChanged{
-                .fov = fov,
+                .focal_length_mm = focal_mm,
                 .scaling_modifier = std::nullopt,
                 .antialiasing = std::nullopt,
                 .background_color = std::nullopt,
                 .equirectangular = std::nullopt}
                 .emit();
+        }
+        const glm::ivec2 render_size = render_manager->getRenderedSize();
+        if (render_size.x > 0 && render_size.y > 0) {
+            const float vfov = lfs::rendering::focalLengthToVFov(focal_mm);
+            const float aspect = static_cast<float>(render_size.x) / static_cast<float>(render_size.y);
+            const float hfov = glm::degrees(2.0f * std::atan(aspect * std::tan(glm::radians(vfov * 0.5f))));
+            ImGui::TextDisabled("%s: %.1f%s H / %.1f%s V",
+                                LOC(MainPanel::FOV_INFO), hfov, "\xC2\xB0", vfov, "\xC2\xB0");
         }
 
         // SH DEGREE selection
@@ -362,7 +374,7 @@ namespace lfs::vis::gui::panels {
 
             ui::RenderSettingsChanged{
                 .sh_degree = current_sh_degree,
-                .fov = std::nullopt,
+                .focal_length_mm = std::nullopt,
                 .scaling_modifier = std::nullopt,
                 .antialiasing = std::nullopt,
                 .background_color = std::nullopt,
@@ -378,7 +390,7 @@ namespace lfs::vis::gui::panels {
 
             ui::RenderSettingsChanged{
                 .sh_degree = std::nullopt,
-                .fov = std::nullopt,
+                .focal_length_mm = std::nullopt,
                 .scaling_modifier = std::nullopt,
                 .antialiasing = std::nullopt,
                 .background_color = std::nullopt,
