@@ -9,8 +9,10 @@
 
 #ifdef _WIN32
 #include <windows.h>
+#include <shlobj.h>
 #else
 #include <limits.h>
+#include <pwd.h>
 #include <unistd.h>
 #endif
 
@@ -118,6 +120,38 @@ namespace lfs::core {
         }
 
         return {};
+    }
+
+    // config directory
+    inline std::filesystem::path getConfigDir() {
+        std::filesystem::path config_dir;
+#ifdef _WIN32
+        const char* path = std::getenv("APPDATA");
+        if (path) {
+            config_dir = std::filesystem::path(path) / "LichtFeldStudio";
+        } else {
+            config_dir = std::filesystem::current_path() / "config";
+        }
+#else
+        const char* xdg = std::getenv("XDG_CONFIG_HOME");
+        if (xdg) {
+            config_dir = std::filesystem::path(xdg) / "LichtFeldStudio";
+        } else {
+            const char* home = std::getenv("HOME");
+            if (!home) {
+                struct passwd* pw = getpwuid(getuid());
+                if (pw)
+                    home = pw->pw_dir;
+            }
+
+            if (home) {
+                config_dir = std::filesystem::path(home) / ".config" / "LichtFeldStudio";
+            } else {
+                config_dir = std::filesystem::current_path() / "config";
+            }
+        }
+#endif
+        return config_dir;
     }
 
 } // namespace lfs::core

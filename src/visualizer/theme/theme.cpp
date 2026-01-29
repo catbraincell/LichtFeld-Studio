@@ -4,6 +4,7 @@
 #include "theme.hpp"
 #include "core/logger.hpp"
 #include "core/path_utils.hpp"
+#include "core/executable_path.hpp"
 #include "internal/resource_paths.hpp"
 #include <algorithm>
 #include <filesystem>
@@ -719,36 +720,9 @@ namespace lfs::vis {
         }
     }
 
-    namespace {
-        std::filesystem::path getThemeConfigDir() {
-            std::filesystem::path config_dir;
-#ifdef _WIN32
-            const char* path = std::getenv("APPDATA");
-            if (path) {
-                config_dir = std::filesystem::path(path) / "LichtFeldStudio";
-            } else {
-                config_dir = std::filesystem::current_path() / "config";
-            }
-#else
-            const char* xdg = std::getenv("XDG_CONFIG_HOME");
-            if (xdg) {
-                config_dir = std::filesystem::path(xdg) / "LichtFeldStudio";
-            } else {
-                const char* home = std::getenv("HOME");
-                if (home) {
-                    config_dir = std::filesystem::path(home) / ".config" / "LichtFeldStudio";
-                } else {
-                    config_dir = std::filesystem::current_path() / "config";
-                }
-            }
-#endif
-            return config_dir;
-        }
-    } // namespace
-
     void saveThemePreference(bool is_dark) {
         try {
-            const auto config_dir = getThemeConfigDir();
+            const auto config_dir = lfs::core::getConfigDir();
             std::filesystem::create_directories(config_dir);
             const auto pref_path = config_dir / "theme_preference";
             std::ofstream file(pref_path);
@@ -762,7 +736,7 @@ namespace lfs::vis {
 
     bool loadThemePreference() {
         try {
-            const auto config_dir = getThemeConfigDir();
+            const auto config_dir = lfs::core::getConfigDir();
             const auto pref_path = config_dir / "theme_preference";
             if (std::filesystem::exists(pref_path)) {
                 std::ifstream file(pref_path);

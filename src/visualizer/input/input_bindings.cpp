@@ -5,21 +5,15 @@
 #include "input/input_bindings.hpp"
 #include "core/logger.hpp"
 #include "core/path_utils.hpp"
+#include "core/executable_path.hpp"
 #include <algorithm>
 #include <fstream>
 #include <nlohmann/json.hpp>
 
-#ifdef _WIN32
-#include <shlobj.h>
-#else
-#include <pwd.h>
-#include <unistd.h>
-#endif
-
 namespace lfs::vis::input {
 
     InputBindings::InputBindings() {
-        const auto config_dir = getConfigDir();
+        const auto config_dir = lfs::core::getConfigDir() / "input_profiles";
         const auto saved_path = config_dir / "Default.json";
         if (std::filesystem::exists(saved_path) && loadProfileFromFile(saved_path)) {
             return;
@@ -32,7 +26,7 @@ namespace lfs::vis::input {
     }
 
     void InputBindings::loadProfile(const std::string& name) {
-        const auto config_dir = getConfigDir();
+        const auto config_dir = lfs::core::getConfigDir() / "input_profiles";
         const auto path = config_dir / (name + ".json");
         if (std::filesystem::exists(path) && loadProfileFromFile(path)) {
             notifyBindingsChanged();
@@ -52,35 +46,10 @@ namespace lfs::vis::input {
     }
 
     void InputBindings::saveProfile(const std::string& name) const {
-        const auto config_dir = getConfigDir();
+        const auto config_dir = lfs::core::getConfigDir() / "input_profiles";
         std::filesystem::create_directories(config_dir);
         const auto path = config_dir / (name + ".json");
         saveProfileToFile(path);
-    }
-
-    std::filesystem::path InputBindings::getConfigDir() {
-        std::filesystem::path config_dir;
-#ifdef _WIN32
-        wchar_t path[MAX_PATH];
-        if (SUCCEEDED(SHGetFolderPathW(nullptr, CSIDL_APPDATA, nullptr, 0, path))) {
-            config_dir = std::filesystem::path(path) / "LichtFeldStudio" / "input_profiles";
-        } else {
-            config_dir = std::filesystem::current_path() / "config" / "input_profiles";
-        }
-#else
-        const char* home = getenv("HOME");
-        if (!home) {
-            struct passwd* pw = getpwuid(getuid());
-            if (pw)
-                home = pw->pw_dir;
-        }
-        if (home) {
-            config_dir = std::filesystem::path(home) / ".config" / "LichtFeldStudio" / "input_profiles";
-        } else {
-            config_dir = std::filesystem::current_path() / "config" / "input_profiles";
-        }
-#endif
-        return config_dir;
     }
 
     bool InputBindings::saveProfileToFile(const std::filesystem::path& path) const {
@@ -205,7 +174,7 @@ namespace lfs::vis::input {
     std::vector<std::string> InputBindings::getAvailableProfiles() const {
         std::vector<std::string> profiles = {"Default"};
 
-        const auto config_dir = getConfigDir();
+        const auto config_dir = lfs::core::getConfigDir() / "input_profiles";
         if (std::filesystem::exists(config_dir)) {
             for (const auto& entry : std::filesystem::directory_iterator(config_dir)) {
                 if (entry.path().extension() == ".json") {

@@ -123,6 +123,9 @@ namespace lfs::vis {
             std::unique_ptr<ExitConfirmationPopup> exit_confirmation_popup_;
             std::unique_ptr<DiskSpaceErrorDialog> disk_space_error_dialog_;
 
+            // UI config file
+            std::string imgui_ini;
+
             // UI state only
             std::unordered_map<std::string, bool> window_states_;
             bool show_main_panel_ = true;

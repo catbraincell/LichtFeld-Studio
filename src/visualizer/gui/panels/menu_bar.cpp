@@ -5,6 +5,7 @@
 #include "gui/panels/menu_bar.hpp"
 #include "config.h"
 #include "core/image_io.hpp"
+#include "core/executable_path.hpp"
 #include "core/logger.hpp"
 #include "core/tensor_trace.hpp"
 #include "core/training_snapshot.hpp"
@@ -966,7 +967,7 @@ namespace lfs::vis::gui {
                 ImGui::PushStyleColor(ImGuiCol_ButtonHovered, withAlpha(t.palette.error, 0.85f));
                 ImGui::PushStyleColor(ImGuiCol_ButtonActive, t.palette.error);
                 if (ImGui::Button(LOC(InputSettings::RESET_TO_DEFAULT))) {
-                    const auto config_dir = input::InputBindings::getConfigDir();
+                    const auto config_dir = lfs::core::getConfigDir() / "input_profiles";
                     const auto saved_path = config_dir / "Default.json";
                     if (std::filesystem::exists(saved_path)) {
                         std::filesystem::remove(saved_path);

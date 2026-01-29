@@ -13,6 +13,7 @@
 #include "core/image_io.hpp"
 #include "core/logger.hpp"
 #include "core/path_utils.hpp"
+#include "core/executable_path.hpp"
 #include "core/sogs.hpp"
 #include "core/splat_data_export.hpp"
 #include "gui/dpi_scale.hpp"
@@ -313,6 +314,13 @@ namespace lfs::vis::gui {
         // Platform/Renderer initialization
         ImGui_ImplGlfw_InitForOpenGL(viewer_->getWindow(), true);
         ImGui_ImplOpenGL3_Init("#version 430");
+
+        // Config file
+        const auto config_dir = lfs::core::getConfigDir();
+        std::filesystem::create_directories(config_dir);
+        auto inifile = config_dir / "imgui.ini";
+        imgui_ini = inifile.string();
+        io.IniFilename = imgui_ini.c_str();
 
         // Initialize localization system
         auto& loc = lichtfeld::LocalizationManager::getInstance();
